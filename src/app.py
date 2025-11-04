@@ -527,6 +527,96 @@ def update_student_device(student_name):
     except Exception as e:
         return jsonify({'error': f'更新失败: {str(e)}'}), 500
 
+@app.route('/api/students/<student_name>/clear-files', methods=['DELETE'])
+def clear_student_files(student_name):
+    """清空指定学生文件夹内的所有文件，但保留学生记录"""
+    try:
+        # 查找学生是否存在
+        student_found = False
+        for student in students:
+            if student['name'] == student_name:
+                student_found = True
+                break
+        
+        if not student_found:
+            return jsonify({'error': '学生不存在'}), 404
+        
+        # 获取学生文件夹路径
+        student_folder = os.path.join(UPLOAD_FOLDER, student_name)
+        
+        # 如果文件夹不存在，直接返回成功
+        if not os.path.exists(student_folder):
+            return jsonify({'success': True, 'message': '学生文件夹不存在，无需清理', 'deleted_files': 0})
+        
+        # 删除文件夹内的所有文件，但保留文件夹本身
+        deleted_count = 0
+        for filename in os.listdir(student_folder):
+            file_path = os.path.join(student_folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                    deleted_count += 1
+                elif os.path.isdir(file_path):
+                    import shutil
+                    shutil.rmtree(file_path)
+                    deleted_count += 1
+            except Exception as e:
+                print(f"删除文件失败 {file_path}: {e}")
+                continue
+        
+        return jsonify({
+            'success': True, 
+            'message': f'成功清空学生"{student_name}"的文件夹，删除了{deleted_count}个文件/文件夹',
+            'deleted_files': deleted_count
+        })
+    except Exception as e:
+        return jsonify({'error': f'清空失败: {str(e)}'}), 500
+
+@app.route('/api/students/clear-all-files', methods=['DELETE'])
+def clear_all_students_files():
+    """清空所有学生文件夹内的所有文件，但保留学生文件夹和记录"""
+    global students
+    try:
+        if not students:
+            return jsonify({'success': True, 'message': '学生列表为空，无需清理', 'deleted_files': 0})
+        
+        total_deleted = 0
+        
+        # 遍历所有学生
+        for student in students:
+            student_name = student['name'] if isinstance(student, dict) else student
+            student_folder = os.path.join(UPLOAD_FOLDER, student_name)
+            
+            # 如果学生文件夹不存在，跳过
+            if not os.path.exists(student_folder):
+                continue
+            
+            # 删除文件夹内的所有文件和子文件夹
+            deleted_count = 0
+            for filename in os.listdir(student_folder):
+                file_path = os.path.join(student_folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                        deleted_count += 1
+                    elif os.path.isdir(file_path):
+                        import shutil
+                        shutil.rmtree(file_path)
+                        deleted_count += 1
+                except Exception as e:
+                    print(f"删除文件失败 {file_path}: {e}")
+                    continue
+            
+            total_deleted += deleted_count
+        
+        return jsonify({
+            'success': True, 
+            'message': f'成功清空所有学生文件夹，共删除了{total_deleted}个文件/文件夹',
+            'deleted_files': total_deleted
+        })
+    except Exception as e:
+        return jsonify({'error': f'清空失败: {str(e)}'}), 500
+
 @app.route('/api/students/clear-all', methods=['DELETE'])
 def clear_all_students():
     """一键清空所有学生列表及其对应文件夹"""
