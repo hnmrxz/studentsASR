@@ -169,7 +169,7 @@ ESP32-S3 I2S麦克风连接:
 ### 常见问题
 
 **Q: ESP32无法连接到WiFi**
-- 检查`funasr.ino`中的WiFi配置是否正确
+- 检查`studentsASR.ino`中的WiFi配置是否正确
 - 确保WiFi网络在ESP32范围内
 
 **Q: 音频文件上传失败**
