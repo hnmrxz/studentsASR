@@ -66,9 +66,9 @@ def generate_random_color():
     """生成随机的渐变色"""
     import random
     colors = [
-        '#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe',
-        '#43e97b', '#fa709a', '#ff9a9e', '#fecfef', '#a8edea', '#d4fc79',
-        '#ffecd2', '#fcbeda', '#ff9a9e', '#fecfef', '#a8edea', '#d4fc79'
+        '#4a55e0', '#5a2a8a', '#d963d6', '#e03a57', '#2a8cf5', '#00c8d9',
+        '#2ab85a', '#e55a85', '#ff6a7e', '#fdbfdf', '#76d6c2', '#b8e55a',
+        '#ffcc99', '#f899c0', '#ff6a7e', '#fdbfdf', '#76d6c2', '#b8e55a'
     ]
     return random.choice(colors)
 
