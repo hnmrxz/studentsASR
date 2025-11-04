@@ -11,7 +11,7 @@ import json
 import time
 import threading
 import argparse
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 from werkzeug.utils import secure_filename
 from funasr import AutoModel
 
@@ -261,6 +261,145 @@ def get_messages():
 def test_api():
     """测试API接口"""
     return jsonify({'message': '语音识别系统运行正常'})
+
+@app.route('/api/excel-template')
+def download_excel_template():
+    """下载Excel导入模板"""
+    import io
+    try:
+        # 尝试导入pandas和openpyxl
+        try:
+            import pandas as pd
+        except ImportError:
+            return jsonify({'error': '缺少pandas库，请安装pandas和openpyxl'}), 500
+        
+        # 创建模板数据
+        template_data = {
+            '学生姓名': ['张三', '李四'],
+            '设备ID': ['1', '2']
+        }
+        df = pd.DataFrame(template_data)
+        
+        # 创建内存中的Excel文件
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='学生信息', index=False)
+        
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='学生导入模板.xlsx'
+        )
+    except Exception as e:
+        return jsonify({'error': f'生成模板失败: {str(e)}'}), 500
+
+@app.route('/api/import-students', methods=['POST'])
+def import_students_from_excel():
+    """从Excel文件导入学生"""
+    global students
+    try:
+        # 检查是否有文件
+        if 'file' not in request.files:
+            return jsonify({'error': '未提供Excel文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '文件名为空'}), 400
+        
+        # 检查文件扩展名
+        if not file.filename.lower().endswith(('.xlsx', '.xls')):
+            return jsonify({'error': '只支持Excel文件(.xlsx, .xls)'}), 400
+        
+        # 尝试导入pandas
+        try:
+            import pandas as pd
+        except ImportError:
+            return jsonify({'error': '缺少pandas库，请安装pandas和openpyxl'}), 500
+        
+        # 读取Excel文件
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return jsonify({'error': f'读取Excel文件失败: {str(e)}'}), 400
+        
+        # 验证必需的列
+        required_columns = ['学生姓名']
+        if not all(col in df.columns for col in required_columns):
+            return jsonify({'error': f'Excel文件必须包含列: {", ".join(required_columns)}'}), 400
+        
+        imported_count = 0
+        errors = []
+        
+        # 处理每一行
+        for index, row in df.iterrows():
+            try:
+                student_name = str(row['学生姓名']).strip() if pd.notna(row['学生姓名']) else ''
+                
+                if not student_name:
+                    errors.append(f'第{index + 2}行: 学生姓名不能为空')
+                    continue
+                
+                # 检查学生是否已存在
+                student_exists = False
+                for existing_student in students:
+                    if existing_student['name'] == student_name:
+                        student_exists = True
+                        break
+                
+                if student_exists:
+                    errors.append(f'第{index + 2}行: 学生"{student_name}"已存在')
+                    continue
+                
+                # 获取设备ID（如果存在）
+                device_id = ''
+                if '设备ID' in df.columns and pd.notna(row['设备ID']):
+                    device_id = str(row['设备ID']).strip()
+                
+                # 检查设备ID是否已存在
+                if device_id:
+                    device_exists = False
+                    for existing_student in students:
+                        if existing_student.get('device_id') == device_id:
+                            device_exists = True
+                            break
+                    if device_exists:
+                        errors.append(f'第{index + 2}行: 设备ID"{device_id}"已存在')
+                        continue
+                
+                # 添加新学生
+                new_student = {
+                    'name': student_name,
+                    'color': generate_random_color(),
+                    'device_id': device_id
+                }
+                students.append(new_student)
+                ensure_student_folder(student_name)
+                imported_count += 1
+                
+            except Exception as e:
+                errors.append(f'第{index + 2}行: 处理失败 - {str(e)}')
+        
+        # 保存学生列表
+        save_students()
+        
+        result = {
+            'success': True,
+            'imported_count': imported_count,
+            'total_rows': len(df),
+            'message': f'成功导入{imported_count}个学生'
+        }
+        
+        if errors:
+            result['errors'] = errors
+            result['message'] += f'，{len(errors)}行有错误'
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': f'导入失败: {str(e)}'}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_from_esp32():

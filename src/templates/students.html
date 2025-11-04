@@ -67,10 +67,10 @@
         
         .student-input {
             flex: 1;
-            padding: 12px;
+            padding: 8px;
             border: 2px solid #ddd;
-            border-radius: 12px;
-            font-size: 16px;
+            border-radius: 8px;
+            font-size: 14px;
         }
         
         .btn {
@@ -215,6 +215,16 @@
             <button class="btn" id="addStudentBtn">添加学生</button>
         </div>
         
+        <div class="excel-import-section" style="margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+            <h3 style="color: #333; margin-bottom: 15px; font-size: 18px;">📊 Excel批量导入</h3>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="file" id="excelFile" accept=".xlsx,.xls" style="flex: 1; padding: 8px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px;" />
+                <button class="btn" id="importExcelBtn" style="padding: 8px 16px; font-size: 14px;">导入学生</button>
+                <button class="btn" id="downloadTemplateBtn" style="padding: 8px 16px; font-size: 14px; background: linear-gradient(135deg, #43e97b 0%, #38a169 100%);">下载模板</button>
+            </div>
+            <div id="importResult" style="margin-top: 10px; padding: 10px; border-radius: 8px; display: none;"></div>
+        </div>
+        
         <div class="students-list">
             <h2>现有学生列表</h2>
             <div id="studentsContainer">
@@ -233,6 +243,10 @@
         const addStudentBtn = document.getElementById('addStudentBtn');
         const studentsContainer = document.getElementById('studentsContainer');
         const notificationDiv = document.getElementById('notification');
+        const excelFileInput = document.getElementById('excelFile');
+        const importExcelBtn = document.getElementById('importExcelBtn');
+        const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
+        const importResultDiv = document.getElementById('importResult');
         
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -243,6 +257,10 @@
             studentNameInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') addStudent();
             });
+            
+            // Excel导入事件
+            importExcelBtn.addEventListener('click', importStudentsFromExcel);
+            downloadTemplateBtn.addEventListener('click', downloadExcelTemplate);
         });
         
         // 加载学生列表
@@ -439,6 +457,75 @@
         window.deleteStudent = deleteStudent;
         window.updateStudentColor = updateStudentColor;
         window.updateDeviceBinding = updateDeviceBinding;
+        
+        // 下载Excel模板
+        async function downloadExcelTemplate() {
+            try {
+                const response = await fetch('/api/excel-template');
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '学生导入模板.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    const data = await response.json();
+                    showNotification(data.error || '下载模板失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('下载模板失败:', error);
+            }
+        }
+        
+        // 从Excel导入学生
+        async function importStudentsFromExcel() {
+            const file = excelFileInput.files[0];
+            if (!file) {
+                showNotification('请选择Excel文件', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                importResultDiv.style.display = 'block';
+                importResultDiv.innerHTML = '<div style="color: #667eea;">正在导入...</div>';
+                
+                const response = await fetch('/api/import-students', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    importResultDiv.style.backgroundColor = '#e6ffe6';
+                    importResultDiv.style.color = '#2e7d32';
+                    importResultDiv.innerHTML = `<strong>导入成功!</strong> ${data.message}`;
+                    excelFileInput.value = '';
+                    loadStudents(); // 重新加载学生列表
+                } else {
+                    importResultDiv.style.backgroundColor = '#ffe6e6';
+                    importResultDiv.style.color = '#d32f2f';
+                    importResultDiv.innerHTML = `<strong>导入失败!</strong> ${data.error || '未知错误'}`;
+                    if (data.errors) {
+                        importResultDiv.innerHTML += `<br><small>错误详情:<br>${data.errors.join('<br>')}</small>`;
+                    }
+                }
+            } catch (error) {
+                importResultDiv.style.display = 'block';
+                importResultDiv.style.backgroundColor = '#ffe6e6';
+                importResultDiv.style.color = '#d32f2f';
+                importResultDiv.innerHTML = `<strong>网络错误!</strong> ${error.message}`;
+                console.error('导入学生失败:', error);
+            }
+        }
     </script>
 </body>
 </html>
