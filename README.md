@@ -1,6 +1,19 @@
 # 学生语音识别系统
 
-![系统架构图](https://via.placeholder.com/800x400?text=Student+Voice+Recognition+System+Architecture)
+## 系统架构
+
+```mermaid
+graph TD
+    A[ESP32-S3录音设备] -->|HTTP POST<br/>Device-Id头部| B(Flask后端服务)
+    B --> C[FunasR语音识别模型]
+    C --> D[识别结果存储]
+    D --> E[Web管理界面]
+    E -->|学生管理| B
+    E -->|设备绑定| B
+    E -->|实时显示| D
+    B -->|自动文件监控| F[学生音频文件夹]
+    F -->|新WAV文件| C
+```
 
 一个基于ESP32-S3硬件和Flask后端的实时学生语音互动识别系统，支持多设备管理和自动语音识别。
 
@@ -94,7 +107,6 @@ python src/app.py --model paraformer-zh
 │   │   └── students.html  # 学生管理页面
 │   ├── ESP32_USAGE.md     # ESP32详细使用说明
 │   └── asr_example.wav    # 语音识别示例音频
-├── IFLOW.md               # 开发者上下文文档
 └── README.md              # 本文件
 ```
 
