@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生管理 - 语音识别系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .student-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .student-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .students-list {
+            margin-top: 20px;
+        }
+        
+        .students-list h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .student-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .student-name {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .color-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #ddd;
+        }
+        
+        .color-input {
+            margin-top: 5px;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .color-update-btn {
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .delete-btn {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .delete-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .empty-message {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .notification {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .notification-error {
+            background: #ffe6e6;
+            color: #d32f2f;
+        }
+        
+        .notification-success {
+            background: #e6ffe6;
+            color: #2e7d32;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .student-form {
+                flex-direction: column;
+            }
+            
+            .btn {
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← 返回识别页面</a>
+        
+        <div class="header">
+            <h1>🎓 学生管理</h1>
+            <p>添加或删除学生，系统会自动创建对应的文件夹</p>
+        </div>
+        
+        <div id="notification"></div>
+        
+        <div class="student-form">
+            <input type="text" id="studentName" class="student-input" placeholder="输入学生姓名" />
+            <button class="btn" id="addStudentBtn">添加学生</button>
+        </div>
+        
+        <div class="students-list">
+            <h2>现有学生列表</h2>
+            <div id="studentsContainer">
+                <!-- 学生列表将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let students = [];
+        
+        // DOM元素
+        const studentNameInput = document.getElementById('studentName');
+        const addStudentBtn = document.getElementById('addStudentBtn');
+        const studentsContainer = document.getElementById('studentsContainer');
+        const notificationDiv = document.getElementById('notification');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStudents();
+            
+            // 绑定事件
+            addStudentBtn.addEventListener('click', addStudent);
+            studentNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') addStudent();
+            });
+        });
+        
+        // 加载学生列表
+        async function loadStudents() {
+            try {
+                const response = await fetch('/api/students');
+                const data = await response.json();
+                students = data.students || [];
+                renderStudentsList();
+            } catch (error) {
+                showNotification('加载学生列表失败', 'error');
+                console.error('加载学生列表失败:', error);
+            }
+        }
+        
+        // 渲染学生列表
+        function renderStudentsList() {
+            if (students.length === 0) {
+                studentsContainer.innerHTML = '<div class="empty-message">暂无学生</div>';
+                return;
+            }
+            
+            studentsContainer.innerHTML = '';
+            students.forEach(student => {
+                const studentItem = document.createElement('div');
+                studentItem.className = 'student-item';
+                studentItem.innerHTML = `
+                    <div class="student-name">
+                        <span style="background: linear-gradient(135deg, ${student.color} 0%, ${adjustColor(student.color, -20)} 100%); width: 20px; height: 20px; border-radius: 50%; display: inline-block;"></span>
+                        ${student.name}
+                    </div>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="color" class="color-input" value="${student.color}" data-student="${student.name}">
+                        <button class="color-update-btn" onclick="updateStudentColor('${student.name}')">更新</button>
+                        <button class="delete-btn" onclick="deleteStudent('${student.name}')">删除</button>
+                    </div>
+                `;
+                studentsContainer.appendChild(studentItem);
+            });
+        }
+        
+        // 调整颜色亮度（复用index.html中的函数）
+        function adjustColor(color, amount) {
+            let usePound = false;
+            if (color[0] === "#") {
+                color = color.slice(1);
+                usePound = true;
+            }
+            const num = parseInt(color, 16);
+            let r = (num >> 16) + amount;
+            if (r > 255) r = 255;
+            else if (r < 0) r = 0;
+            let b = ((num >> 8) & 0x00FF) + amount;
+            if (b > 255) b = 255;
+            else if (b < 0) b = 0;
+            let g = (num & 0x0000FF) + amount;
+            if (g > 255) g = 255;
+            else if (g < 0) g = 0;
+            return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+        }
+        
+        // 添加学生
+        async function addStudent() {
+            const name = studentNameInput.value.trim();
+            if (!name) {
+                showNotification('请输入学生姓名', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/students', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    studentNameInput.value = '';
+                    loadStudents();
+                    showNotification('学生添加成功', 'success');
+                } else {
+                    showNotification(data.error || '添加失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('添加学生失败:', error);
+            }
+        }
+        
+        // 删除学生
+        async function deleteStudent(studentName) {
+            if (!confirm(`确定要删除学生 "${studentName}" 吗？这将删除该学生的所有文件！`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/students/${encodeURIComponent(studentName)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    loadStudents();
+                    showNotification('学生删除成功', 'success');
+                } else {
+                    showNotification(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('删除学生失败:', error);
+            }
+        }
+        
+        // 显示通知
+        function showNotification(message, type) {
+            notificationDiv.innerHTML = `
+                <div class="notification notification-${type}">
+                    ${message}
+                </div>
+            `;
+            setTimeout(() => {
+                notificationDiv.innerHTML = '';
+            }, 3000);
+        }
+        
+        // 更新学生颜色
+        async function updateStudentColor(studentName) {
+            const colorInput = document.querySelector(`input[data-student="${studentName}"]`);
+            const newColor = colorInput.value;
+            
+            try {
+                const response = await fetch(`/api/students/${encodeURIComponent(studentName)}/color`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ color: newColor })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    loadStudents();
+                    showNotification('颜色更新成功', 'success');
+                } else {
+                    showNotification(data.error || '更新失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('更新颜色失败:', error);
+            }
+        }
+        
+        // 全局函数供删除按钮调用
+        window.deleteStudent = deleteStudent;
+        window.updateStudentColor = updateStudentColor;
+    </script>
+</body>
+</html>

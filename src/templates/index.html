@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生语音互动系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .students-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .students-link:hover {
+            text-decoration: underline;
+        }
+        
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #856404;
+        }
+        
+        .chat-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            min-height: 0;
+        }
+        
+        .chat-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            min-height: 0;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 12px;
+            max-width: 80%;
+            word-break: break-word;
+            line-height: 1.5;
+            align-self: flex-start;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            color: #000000 !important;
+        }
+        
+        .message-student {
+            /* 背景色将通过JavaScript动态设置 */
+            color: #000000 !important;
+            background-color: transparent !important;
+            border: 2px solid transparent;
+        }
+        
+        .message-default {
+            background: #f0f4f8;
+            color: #2c3e50;
+            border-left: 4px solid #667eea;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .message-content {
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .notification {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .notification-error {
+            background: #ffe6e6;
+            color: #d32f2f;
+        }
+        
+        .notification-success {
+            background: #e6ffe6;
+            color: #2e7d32;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎤 学生语音互动系统</h1>
+        <a href="/students" class="students-link">管理学生 →</a>
+    </div>
+
+    <div class="chat-section">
+        <h2>💬 实时语音互动消息</h2>
+        <div class="chat-messages" id="chatMessages">
+            <!-- 消息将在这里动态显示 -->
+            <div style="text-align: center; color: #666; padding: 20px;">
+                等待语音识别消息...
+            </div>
+        </div>
+        
+        <div class="loading" id="chatLoading">
+            <div class="spinner"></div>
+            <div>正在加载消息...</div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let lastMessageTimestamp = 0;
+        
+        // DOM元素
+        const chatMessages = document.getElementById('chatMessages');
+        const chatLoading = document.getElementById('chatLoading');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStudentColors().then(() => {
+                loadMessages();
+                startAutoRefresh();
+            });
+        });
+        
+        // 加载消息
+        async function loadMessages() {
+            try {
+                chatLoading.style.display = 'block';
+                const response = await fetch('/api/messages');
+                const data = await response.json();
+                
+                if (data.messages && data.messages.length > 0) {
+                    displayMessages(data.messages);
+                    // 更新最后消息时间戳
+                    const latestMessage = data.messages[data.messages.length - 1];
+                    lastMessageTimestamp = latestMessage.timestamp;
+                }
+            } catch (error) {
+                console.error('加载消息失败:', error);
+            } finally {
+                chatLoading.style.display = 'none';
+            }
+        }
+        
+        // 存储学生颜色映射
+        let studentColors = {};
+        
+        // 显示消息
+        function displayMessages(messages) {
+            if (messages.length === 0) {
+                chatMessages.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">等待语音识别消息...</div>';
+                return;
+            }
+            
+            // 反转消息顺序，最新的在最上面
+            const reversedMessages = [...messages].reverse();
+            
+            chatMessages.innerHTML = '';
+            reversedMessages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message message-${msg.student === 'default' ? 'default' : 'student'}`;
+                
+                // 设置学生消息框样式
+                if (msg.student !== 'default' && studentColors[msg.student]) {
+                    const bgColor = studentColors[msg.student];
+                    messageDiv.style.backgroundColor = bgColor;
+                    messageDiv.style.border = '2px solid ' + bgColor;
+                    messageDiv.style.color = '#000000';
+                } else if (msg.student !== 'default') {
+                    // 如果没有颜色信息，使用默认色
+                    const defaultColor = '#667eea';
+                    messageDiv.style.backgroundColor = defaultColor;
+                    messageDiv.style.border = '2px solid ' + defaultColor;
+                    messageDiv.style.color = '#000000';
+                } else {
+                    // default消息保持原有样式
+                    messageDiv.classList.add('message-default');
+                }
+                
+                const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString('zh-CN', {
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                messageDiv.innerHTML = `
+                    <div class="message-header">
+                        <strong>${msg.student === 'default' ? '未分类' : msg.student}</strong>
+                        <span>${timestamp}</span>
+                    </div>
+                    <div class="message-content">${msg.text}</div>
+                `;
+                chatMessages.appendChild(messageDiv);
+            });
+        }
+        
+        // 调整颜色亮度
+        function adjustColor(color, amount) {
+            let usePound = false;
+            if (color[0] === "#") {
+                color = color.slice(1);
+                usePound = true;
+            }
+            const num = parseInt(color, 16);
+            let r = (num >> 16) + amount;
+            if (r > 255) r = 255;
+            else if (r < 0) r = 0;
+            let b = ((num >> 8) & 0x00FF) + amount;
+            if (b > 255) b = 255;
+            else if (b < 0) b = 0;
+            let g = (num & 0x0000FF) + amount;
+            if (g > 255) g = 255;
+            else if (g < 0) g = 0;
+            return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+        }
+        
+        // 获取对比色（反色）
+        function getContrastColor(hexColor) {
+            // 移除#号
+            let color = hexColor.charAt(0) === '#' ? hexColor.substring(1) : hexColor;
+            
+            // 转换为RGB
+            const r = parseInt(color.substring(0, 2), 16);
+            const g = parseInt(color.substring(2, 4), 16);
+            const b = parseInt(color.substring(4, 6), 16);
+            
+            // 计算亮度 (使用WCAG公式)
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            
+            // 如果亮度大于128，返回深色文字，否则返回浅色文字
+            return brightness > 128 ? '#2c3e50' : '#ffffff';
+        }
+        
+        // 加载学生颜色信息
+        async function loadStudentColors() {
+            try {
+                const response = await fetch('/api/students');
+                const data = await response.json();
+                if (data.students) {
+                    studentColors = {};
+                    data.students.forEach(student => {
+                        studentColors[student.name] = student.color;
+                    });
+                }
+            } catch (error) {
+                console.error('加载学生颜色失败:', error);
+            }
+        }
+        
+        // 自动刷新消息
+        function startAutoRefresh() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/messages');
+                    const data = await response.json();
+                    
+                    if (data.messages && data.messages.length > 0) {
+                        // 检查是否有新消息
+                        const latestMessage = data.messages[data.messages.length - 1];
+                        if (latestMessage.timestamp > lastMessageTimestamp) {
+                            displayMessages(data.messages);
+                            lastMessageTimestamp = latestMessage.timestamp;
+                        }
+                    }
+                } catch (error) {
+                    console.error('自动刷新失败:', error);
+                }
+            }, 2000); // 每2秒刷新一次
+        }
+    </script>
+</body>
+</html>
