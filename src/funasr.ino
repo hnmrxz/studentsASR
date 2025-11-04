@@ -24,7 +24,7 @@ const char* serverUrl = "http://YOUR_SERVER_IP:5000/upload";
 #define LED_PIN 2
 
 // 设备信息 - 烧录前手动修改 deviceId
-String deviceId = "ESP32_001";  // 设备唯一标识，每个设备不同
+String deviceId = "001";  // 设备唯一标识，每个设备不同
 
 // 录音状态
 bool isRecording = false;
