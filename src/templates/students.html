@@ -226,7 +226,10 @@
         </div>
         
         <div class="students-list">
-            <h2>现有学生列表</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>现有学生列表</h2>
+                <button class="btn" id="clearAllStudentsBtn" style="padding: 6px 12px; font-size: 14px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);">清空所有学生</button>
+            </div>
             <div id="studentsContainer">
                 <!-- 学生列表将在这里动态生成 -->
             </div>
@@ -247,6 +250,7 @@
         const importExcelBtn = document.getElementById('importExcelBtn');
         const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
         const importResultDiv = document.getElementById('importResult');
+        const clearAllStudentsBtn = document.getElementById('clearAllStudentsBtn');
         
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -261,6 +265,9 @@
             // Excel导入事件
             importExcelBtn.addEventListener('click', importStudentsFromExcel);
             downloadTemplateBtn.addEventListener('click', downloadExcelTemplate);
+            
+            // 清空所有学生事件
+            clearAllStudentsBtn.addEventListener('click', clearAllStudents);
         });
         
         // 加载学生列表
@@ -524,6 +531,30 @@
                 importResultDiv.style.color = '#d32f2f';
                 importResultDiv.innerHTML = `<strong>网络错误!</strong> ${error.message}`;
                 console.error('导入学生失败:', error);
+            }
+        }
+        
+        // 清空所有学生
+        async function clearAllStudents() {
+            if (!confirm('确定要清空所有学生吗？这将删除所有学生及其对应的文件夹和文件！此操作无法撤销！')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/students/clear-all', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    loadStudents();
+                    showNotification(data.message || '所有学生已清空', 'success');
+                } else {
+                    showNotification(data.error || '清空失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('清空学生失败:', error);
             }
         }
     </script>

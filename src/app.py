@@ -527,6 +527,40 @@ def update_student_device(student_name):
     except Exception as e:
         return jsonify({'error': f'更新失败: {str(e)}'}), 500
 
+@app.route('/api/students/clear-all', methods=['DELETE'])
+def clear_all_students():
+    """一键清空所有学生列表及其对应文件夹"""
+    global students, recognized_messages
+    try:
+        if not students:
+            return jsonify({'success': True, 'message': '学生列表已为空'})
+        
+        # 删除所有学生文件夹
+        deleted_count = 0
+        for student in students:
+            student_name = student['name'] if isinstance(student, dict) else student
+            student_folder = os.path.join(UPLOAD_FOLDER, student_name)
+            if os.path.exists(student_folder):
+                import shutil
+                shutil.rmtree(student_folder)
+                deleted_count += 1
+        
+        # 清空学生列表
+        students.clear()
+        save_students()
+        
+        # 清空识别消息
+        with recognized_messages_lock:
+            recognized_messages.clear()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'成功清空所有学生，删除了{deleted_count}个文件夹',
+            'deleted_folders': deleted_count
+        })
+    except Exception as e:
+        return jsonify({'error': f'清空失败: {str(e)}'}), 500
+
 def init_model(model_name="paraformer-zh"):
     """初始化FunASR模型"""
     global model
