@@ -211,6 +211,7 @@
         
         <div class="student-form">
             <input type="text" id="studentName" class="student-input" placeholder="输入学生姓名" />
+            <input type="text" id="deviceId" class="student-input" placeholder="输入设备ID（可选）" />
             <button class="btn" id="addStudentBtn">添加学生</button>
         </div>
         
@@ -228,6 +229,7 @@
         
         // DOM元素
         const studentNameInput = document.getElementById('studentName');
+        const deviceIdInput = document.getElementById('deviceId');
         const addStudentBtn = document.getElementById('addStudentBtn');
         const studentsContainer = document.getElementById('studentsContainer');
         const notificationDiv = document.getElementById('notification');
@@ -267,6 +269,8 @@
             students.forEach(student => {
                 const studentItem = document.createElement('div');
                 studentItem.className = 'student-item';
+                // 获取设备ID
+                const deviceId = getDeviceIdByStudent(student.name);
                 studentItem.innerHTML = `
                     <div class="student-name">
                         <span style="background: linear-gradient(135deg, ${student.color} 0%, ${adjustColor(student.color, -20)} 100%); width: 20px; height: 20px; border-radius: 50%; display: inline-block;"></span>
@@ -275,6 +279,8 @@
                     <div style="display: flex; gap: 5px; align-items: center;">
                         <input type="color" class="color-input" value="${student.color}" data-student="${student.name}">
                         <button class="color-update-btn" onclick="updateStudentColor('${student.name}')">更新</button>
+                        <input type="text" class="device-input" placeholder="设备ID" value="${deviceId || ''}" data-student="${student.name}" style="padding: 6px; border: 2px solid #ddd; border-radius: 6px; font-size: 12px; width: 100px;">
+                        <button class="device-update-btn" onclick="updateDeviceBinding('${student.name}')">绑定</button>
                         <button class="delete-btn" onclick="deleteStudent('${student.name}')">删除</button>
                     </div>
                 `;
@@ -302,9 +308,20 @@
             return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
         }
         
+        // 根据学生姓名获取设备ID
+        function getDeviceIdByStudent(studentName) {
+            for (const student of students) {
+                if (student.name === studentName) {
+                    return student.device_id || '';
+                }
+            }
+            return '';
+        }
+        
         // 添加学生
         async function addStudent() {
             const name = studentNameInput.value.trim();
+            const deviceId = deviceIdInput.value.trim();
             if (!name) {
                 showNotification('请输入学生姓名', 'error');
                 return;
@@ -314,12 +331,13 @@
                 const response = await fetch('/api/students', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
+                    body: JSON.stringify({ name, device_id: deviceId })
                 });
                 
                 const data = await response.json();
                 if (response.ok) {
                     studentNameInput.value = '';
+                    deviceIdInput.value = '';
                     loadStudents();
                     showNotification('学生添加成功', 'success');
                 } else {
@@ -392,9 +410,35 @@
             }
         }
         
+        // 更新设备绑定
+        async function updateDeviceBinding(studentName) {
+            const deviceInput = document.querySelector(`input[data-student="${studentName}"].device-input`);
+            const newDeviceId = deviceInput.value.trim();
+            
+            try {
+                const response = await fetch(`/api/students/${encodeURIComponent(studentName)}/device`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: newDeviceId })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    loadStudents();
+                    showNotification(newDeviceId ? '设备绑定成功' : '设备解绑成功', 'success');
+                } else {
+                    showNotification(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showNotification('网络错误', 'error');
+                console.error('设备绑定操作失败:', error);
+            }
+        }
+        
         // 全局函数供删除按钮调用
         window.deleteStudent = deleteStudent;
         window.updateStudentColor = updateStudentColor;
+        window.updateDeviceBinding = updateDeviceBinding;
     </script>
 </body>
 </html>

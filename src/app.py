@@ -18,7 +18,6 @@ from funasr import AutoModel
 # 配置
 UPLOAD_FOLDER = 'uploads'
 STUDENTS_FILE = 'students.json'
-DEVICES_FILE = 'devices.json'
 ALLOWED_EXTENSIONS = {'wav'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -33,7 +32,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # 全局变量
 model = None
 students = []
-devices = []
 recognized_messages = []
 recognized_messages_lock = threading.Lock()
 
@@ -62,18 +60,7 @@ def load_students():
         print(f"加载学生列表失败: {e}")
         students = []
 
-# 加载设备列表
-def load_devices():
-    global devices
-    try:
-        if os.path.exists(DEVICES_FILE):
-            with open(DEVICES_FILE, 'r', encoding='utf-8') as f:
-                devices = json.load(f)
-        else:
-            devices = []
-    except Exception as e:
-        print(f"加载设备列表失败: {e}")
-        devices = []
+
 
 def generate_random_color():
     """生成随机的渐变色"""
@@ -93,13 +80,7 @@ def save_students():
     except Exception as e:
         print(f"保存学生列表失败: {e}")
 
-# 保存设备列表
-def save_devices():
-    try:
-        with open(DEVICES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(devices, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"保存设备列表失败: {e}")
+
 
 # 确保学生文件夹存在
 def ensure_student_folder(student_name):
@@ -107,9 +88,8 @@ def ensure_student_folder(student_name):
     os.makedirs(student_folder, exist_ok=True)
     return student_folder
 
-# 初始化学生和设备数据
+# 初始化学生数据
 load_students()
-load_devices()
 
 def allowed_file(filename):
     """检查文件扩展名是否允许"""
@@ -179,7 +159,7 @@ def get_students():
 @app.route('/api/students', methods=['POST'])
 def add_student():
     """添加学生（可选绑定设备ID）"""
-    global students, devices
+    global students
     try:
         data = request.get_json()
         student_name = data.get('name', '').strip()
@@ -193,32 +173,21 @@ def add_student():
             if student['name'] == student_name:
                 return jsonify({'error': '学生已存在'}), 400
         
-        # 添加新学生，包含随机颜色
+        # 检查设备ID是否已存在（如果提供了设备ID）
+        if device_id:
+            for student in students:
+                if student.get('device_id') == device_id:
+                    return jsonify({'error': '设备ID已存在'}), 400
+        
+        # 添加新学生，包含随机颜色和设备ID
         new_student = {
             'name': student_name,
-            'color': generate_random_color()
+            'color': generate_random_color(),
+            'device_id': device_id
         }
         students.append(new_student)
         save_students()
         ensure_student_folder(student_name)
-        
-        # 如果提供了设备ID，自动创建设备绑定
-        if device_id:
-            # 检查设备ID是否已存在
-            device_exists = False
-            for device in devices:
-                if device['device_id'] == device_id:
-                    device_exists = True
-                    break
-            
-            if not device_exists:
-                new_device = {
-                    'device_id': device_id,
-                    'student_name': student_name
-                }
-                devices.append(new_device)
-                save_devices()
-                print(f"自动创建设备绑定: {device_id} -> {student_name}")
         
         return jsonify({
             'success': True, 
@@ -305,14 +274,14 @@ def upload_from_esp32():
         
         # 根据设备ID查找对应的学生
         student_name = ""
-        device_found = False
-        for device in devices:
-            if device.get('device_id') == device_id:
-                student_name = device.get('student_name', '')
-                device_found = True
+        student_found = False
+        for student in students:
+            if student.get('device_id') == device_id:
+                student_name = student['name']
+                student_found = True
                 break
         
-        if not device_found:
+        if not student_found:
             # 设备未绑定，使用设备ID作为学生姓名
             student_name = f"设备_{device_id}"
         
@@ -325,10 +294,11 @@ def upload_from_esp32():
                 break
         
         if not student_exists:
-            # 自动创建新学生
+            # 自动创建新学生（无设备绑定）
             new_student = {
                 'name': student_name,
-                'color': generate_random_color()
+                'color': generate_random_color(),
+                'device_id': ""
             }
             students.append(new_student)
             save_students()
@@ -384,71 +354,39 @@ def upload_from_esp32():
         print(f"ESP32上传处理错误: {e}")
         return jsonify({'error': f'上传失败: {str(e)}'}), 500
 
-@app.route('/api/devices', methods=['GET'])
-def get_devices():
-    """获取设备列表"""
-    return jsonify({'devices': devices})
-
-@app.route('/api/devices', methods=['POST'])
-def add_device():
-    """添加设备绑定"""
-    global devices
+@app.route('/api/students/<student_name>/device', methods=['PUT'])
+def update_student_device(student_name):
+    """更新学生设备绑定"""
+    global students
     try:
         data = request.get_json()
-        device_id = data.get('device_id', '').strip()
-        student_name = data.get('student_name', '').strip()
+        new_device_id = data.get('device_id', '').strip()
         
-        if not device_id or not student_name:
-            return jsonify({'error': '设备ID和学生姓名不能为空'}), 400
-        
-        # 检查设备是否已存在
-        for device in devices:
-            if device['device_id'] == device_id:
-                return jsonify({'error': '设备ID已存在'}), 400
-        
-        # 检查学生是否存在
-        student_exists = False
-        for student in students:
-            name = student['name'] if isinstance(student, dict) else student
-            if name == student_name:
-                student_exists = True
+        # 查找学生
+        student_found = False
+        student_index = -1
+        for i, student in enumerate(students):
+            if student['name'] == student_name:
+                student_found = True
+                student_index = i
                 break
         
-        if not student_exists:
-            return jsonify({'error': '学生不存在，请先添加学生'}), 400
+        if not student_found:
+            return jsonify({'error': '学生不存在'}), 404
         
-        # 添加新设备绑定
-        new_device = {
-            'device_id': device_id,
-            'student_name': student_name
-        }
-        devices.append(new_device)
-        save_devices()
+        # 如果设置了新的设备ID，检查是否已存在
+        if new_device_id:
+            for i, student in enumerate(students):
+                if student.get('device_id') == new_device_id and i != student_index:
+                    return jsonify({'error': '设备ID已存在'}), 400
         
-        return jsonify({'success': True, 'message': '设备绑定成功', 'device': new_device})
+        # 更新设备ID
+        students[student_index]['device_id'] = new_device_id
+        save_students()
+        
+        return jsonify({'success': True, 'message': '设备绑定更新成功'})
     except Exception as e:
-        return jsonify({'error': f'绑定失败: {str(e)}'}), 500
-
-@app.route('/api/devices/<device_id>', methods=['DELETE'])
-def delete_device(device_id):
-    """删除设备绑定"""
-    global devices
-    try:
-        device_to_delete = None
-        for device in devices:
-            if device['device_id'] == device_id:
-                device_to_delete = device
-                break
-        
-        if device_to_delete is None:
-            return jsonify({'error': '设备不存在'}), 404
-        
-        devices.remove(device_to_delete)
-        save_devices()
-        
-        return jsonify({'success': True, 'message': '设备绑定删除成功'})
-    except Exception as e:
-        return jsonify({'error': f'删除失败: {str(e)}'}), 500
+        return jsonify({'error': f'更新失败: {str(e)}'}), 500
 
 def init_model(model_name="paraformer-zh"):
     """初始化FunASR模型"""
